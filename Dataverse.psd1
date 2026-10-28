@@ -8,153 +8,145 @@
 
 @{
 
-# Script module or binary module file associated with this manifest.
-RootModule = 'Dataverse.psm1'
+    # Script module or binary module file associated with this manifest.
+    RootModule           = 'Dataverse.psm1'
 
-# Version number of this module.
-ModuleVersion = '1.2.0'
+    # Version number of this module.
+    ModuleVersion        = '1.2.0'
 
-# Supported PSEditions
-CompatiblePSEditions = @('Core')
+    # Supported PSEditions
+    CompatiblePSEditions = @('Core')
 
-# ID used to uniquely identify this module
-GUID = 'b8d2f4a6-3c5e-4f1d-9a8b-7e2c1f5d3a9e'
+    # ID used to uniquely identify this module
+    GUID                 = 'b8d2f4a6-3c5e-4f1d-9a8b-7e2c1f5d3a9e'
 
-# Author of this module
-Author = 'Mike Lacher, Jonathan Dimino @ Microsoft Corporation'
+    # Author of this module
+    Author               = 'Mike Lacher, Jonathan Dimino @ Microsoft Corporation'
 
-# Company or vendor of this module
-CompanyName = 'Microsoft Corporation'
+    # Company or vendor of this module
+    CompanyName          = 'Microsoft Corporation'
 
-# Copyright statement for this module
-Copyright = '(c) Microsoft Corporation. All rights reserved.'
+    # Copyright statement for this module
+    Copyright            = '(c) Microsoft Corporation. All rights reserved.'
 
-# Description of the functionality provided by this module
-Description = 'PowerShell module for interacting with Microsoft Dataverse environments. Provides comprehensive functionality for connecting to Dataverse, managing authentication, and performing CRUD operations on tables and records.'
+    # Description of the functionality provided by this module
+    Description          = 'PowerShell module for interacting with Microsoft Dataverse environments. Provides comprehensive functionality for connecting to Dataverse, managing authentication, and performing CRUD operations on tables and records.'
 
-# Minimum version of the PowerShell engine required by this module
-PowerShellVersion = '7.6'
+    # Minimum version of the PowerShell engine required by this module
+    PowerShellVersion    = '7.6'
 
-# Name of the PowerShell host required by this module
-# PowerShellHostName = ''
+    # Name of the PowerShell host required by this module
+    # PowerShellHostName = ''
 
-# Minimum version of the PowerShell host required by this module
-# PowerShellHostVersion = ''
+    # Minimum version of the PowerShell host required by this module
+    # PowerShellHostVersion = ''
 
-# Minimum version of Microsoft .NET Framework required by this module. This prerequisite is valid for the PowerShell Desktop edition only.
-# DotNetFrameworkVersion = ''
+    # Minimum version of Microsoft .NET Framework required by this module. This prerequisite is valid for the PowerShell Desktop edition only.
+    # DotNetFrameworkVersion = ''
 
-# Minimum version of the common language runtime (CLR) required by this module. This prerequisite is valid for the PowerShell Desktop edition only.
-# ClrVersion = ''
+    # Minimum version of the common language runtime (CLR) required by this module. This prerequisite is valid for the PowerShell Desktop edition only.
+    # ClrVersion = ''
 
-# Processor architecture (None, X86, Amd64) required by this module
-# ProcessorArchitecture = ''
+    # Processor architecture (None, X86, Amd64) required by this module
+    # ProcessorArchitecture = ''
 
-# Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @()
+    # Modules that must be imported into the global environment prior to importing this module
+    RequiredModules      = @()
 
-# Assemblies that must be loaded prior to importing this module
-# RequiredAssemblies = @()
+    # Assemblies that must be loaded prior to importing this module
+    # RequiredAssemblies = @()
 
-# Script files (.ps1) that are run in the caller's environment prior to importing this module.
-# ScriptsToProcess = @()
+    # Script files (.ps1) that are run in the caller's environment prior to importing this module.
+    # ScriptsToProcess = @()
 
-# Type files (.ps1xml) to be loaded when importing this module
-# TypesToProcess = @()
+    # Type files (.ps1xml) to be loaded when importing this module
+    # TypesToProcess = @()
 
-# Format files (.ps1xml) to be loaded when importing this module
-# FormatsToProcess = @()
+    # Format files (.ps1xml) to be loaded when importing this module
+    # FormatsToProcess = @()
 
-# Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-# NestedModules = @()
+    # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
+    # NestedModules = @()
 
-# Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = @(
-    'Connect-PSDVOrg',
-    'Disconnect-PSDVOrg',
-    'Invoke-PSDVWebRequest',
-    'Read-PSDVTableData',
-    'Get-PSDVTableDetail',
-    'Get-PSDVTableColumn',
-    'Get-PSDVTableItem',
-    'Get-PSDVTableItemAuditHistory',
-    'Get-PSDVTableItemChangeHistory',
-    'New-PSDVTableItem',
-    'Update-PSDVTableItem',
-    'Invoke-PSDVTableItemUpsert',
-    'New-PSDVTableItemBatch',
-    'Update-PSDVTableItemBatch',
-    'Invoke-PSDVTableItemUpsertBatch',
-    'Remove-PSDVTableItem',
-    'New-PSDVTableWebHook',
-    'Get-PSDVTableWebHook',
-    'Remove-PSDVTableWebHook',
-    'Update-PSDVTableWebHookAuthSecret'
-)
+    # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
+    FunctionsToExport    = @(
+        'Connect-PSDVOrg',
+        'Disconnect-PSDVOrg',
+        'Invoke-PSDVWebRequest',
+        'Read-PSDVTableData',
+        'Get-PSDVTableDetail',
+        'Get-PSDVTableColumn',
+        'Get-PSDVTableItem',
+        'Get-PSDVTableItemAuditHistory',
+        'Get-PSDVTableItemChangeHistory',
+        'New-PSDVTableItem',
+        'Update-PSDVTableItem',
+        'Invoke-PSDVTableItemUpsert',
+        'New-PSDVTableItemBatch',
+        'Update-PSDVTableItemBatch',
+        'Invoke-PSDVTableItemUpsertBatch',
+        'Remove-PSDVTableItem',
+        'New-PSDVTableWebHook',
+        'Get-PSDVTableWebHook',
+        'Remove-PSDVTableWebHook',
+        'Update-PSDVTableWebHookAuthSecret'
+    )
 
-# Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
-CmdletsToExport = @()
+    # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
+    CmdletsToExport      = @()
 
-# Variables to export from this module
-VariablesToExport = @()
+    # Variables to export from this module
+    VariablesToExport    = @()
 
-# Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-AliasesToExport = @()
+    # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
+    AliasesToExport      = @()
 
-# DSC resources to export from this module
-# DscResourcesToExport = @()
+    # DSC resources to export from this module
+    # DscResourcesToExport = @()
 
-# List of all modules packaged with this module
-# ModuleList = @()
+    # List of all modules packaged with this module
+    # ModuleList = @()
 
-# List of all files packaged with this module
-# FileList = @()
+    # List of all files packaged with this module
+    # FileList = @()
 
-# Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
-PrivateData = @{
+    # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
+    PrivateData          = @{
 
-    PSData = @{
+        PSData = @{
 
-        # Tags applied to this module. These help with module discovery in online galleries.
-        Tags = @('Dataverse', 'PowerPlatform', 'CRM', 'Dynamics365', 'REST', 'API', 'Microsoft')
+            # Tags applied to this module. These help with module discovery in online galleries.
+            Tags                     = @('Dataverse', 'PowerPlatform', 'CRM', 'Dynamics365', 'REST', 'API', 'Microsoft')
 
-        # A URL to the license for this module.
-        LicenseUri = 'https://github.com/microsoft/Dataverse/blob/main/LICENSE'
+            # A URL to the license for this module.
+            LicenseUri               = 'https://github.com/microsoft/Dataverse/blob/main/LICENSE'
 
-        # A URL to the main website for this project.
-        ProjectUri = 'https://github.com/microsoft/Dataverse'
+            # A URL to the main website for this project.
+            ProjectUri               = 'https://github.com/microsoft/Dataverse'
 
-        # A URL to an icon representing this module.
-        IconUri = ''
+            # A URL to an icon representing this module.
+            IconUri                  = ''
 
-        # ReleaseNotes of this module
-        ReleaseNotes = @'
-Dataverse v1.2.0 - Upserts, Batches, Optimistic Concurrency, and Input Validation
+            # ReleaseNotes of this module
+            ReleaseNotes             = 'Dataverse v1.2.0 - View full release notes at : https://github.com/microsoft/Dataverse'
 
-Requires PowerShell 7.6 or later. Version 1.1.1 is the latest release that supports PowerShell 7.3-7.5.
+            # Prerelease string of this module
+            Prerelease               = 'release1'
 
-Adds alternate-key upsert support, batch create/update/upsert commands, categorized batch results, deeper JSON payload serialization, and large-query page streaming. Invoke-PSDVWebRequest returns an empty collection (instead of $null) when a query matches no records, adds -AsCollection and -SkipHttpErrorCheck, and exposes structured HTTP errors (PSDVPreconditionFailed, PSDVHttpError, PSDVWebRequestFailed). Update-PSDVTableItem adds -IfMatch for ETag-conditional updates. Parameter validation now uses native PowerShell attributes across all public and private functions.
+            # Flag to indicate whether the module requires explicit user acceptance for install/update/save
+            RequireLicenseAcceptance = $false
 
-For detailed documentation, visit: https://github.com/microsoft/Dataverse
-'@
+            # External dependent modules of this module
+            # ExternalModuleDependencies = @()
 
-        # Prerelease string of this module
-        # Prerelease = ''
+        } # End of PSData hashtable
 
-        # Flag to indicate whether the module requires explicit user acceptance for install/update/save
-        RequireLicenseAcceptance = $false
+    } # End of PrivateData hashtable
 
-        # External dependent modules of this module
-        # ExternalModuleDependencies = @()
+    # HelpInfo URI of this module
+    HelpInfoURI          = 'https://github.com/microsoft/Dataverse/blob/main/README.md'
 
-    } # End of PSData hashtable
-
-} # End of PrivateData hashtable
-
-# HelpInfo URI of this module
-HelpInfoURI = 'https://github.com/microsoft/Dataverse/blob/main/README.md'
-
-# Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
-# DefaultCommandPrefix = ''
+    # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
+    # DefaultCommandPrefix = ''
 
 }
