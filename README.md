@@ -347,6 +347,14 @@ catch {
 Get-PSDVTableItem -Table "account" -Verbose
 ```
 
+## Releasing
+
+Pull requests targeting `dev` or `main` run the Pester suite on Windows and Ubuntu (`.github/workflows/ci.yml`). Publishing to the [PowerShell Gallery](https://www.powershellgallery.com/packages/Dataverse/) is automated by `.github/workflows/publish.yml`:
+
+1. In a pull request, update `ModuleVersion` in `Dataverse.psd1` (and the release notes), and merge it to `main`.
+2. Create a GitHub Release from `main` with the tag `v<ModuleVersion>` (for example `v1.1.1`). Prereleases are ignored.
+3. The workflow reruns the tests, verifies that the tag matches the manifest version, that the commit is on `main`, and that the version is not already on the Gallery, then publishes only the module files (`Dataverse.psd1`, `Dataverse.psm1`, `LICENSE`, `Public`, `Private`, `lib`).
+
 ## Contributing
 
 This module follows PowerShell best practices and PSScriptAnalyzer rules. When contributing:

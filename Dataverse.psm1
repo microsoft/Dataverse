@@ -1,6 +1,6 @@
 $script:PSDVPublicClientID = '1950a258-227b-4e31-a9cf-717495945fc2'
 $script:PSDVAzureIdentityLoaded = $false
-$script:PSDVAzureIdentityAssemblyPath = Join-Path $PSScriptRoot 'lib\netstandard2.0'
+$script:PSDVAzureIdentityAssemblyPath = Join-Path $PSScriptRoot 'lib' 'netstandard2.0'
 $script:PSDVAzureAuthorityHosts = @{
     AzureCloud        = 'https://login.microsoftonline.com/'
     AzureChinaCloud   = 'https://login.chinacloudapi.cn/'
@@ -47,11 +47,11 @@ $publicFunctions = @(
 )
 
 foreach ($functionName in $privateFunctions) {
-    . (Join-Path $PSScriptRoot "Private\$functionName.ps1")
+    . (Join-Path $PSScriptRoot 'Private' "$functionName.ps1")
 }
 
 foreach ($functionName in $publicFunctions) {
-    . (Join-Path $PSScriptRoot "Public\$functionName.ps1")
+    . (Join-Path $PSScriptRoot 'Public' "$functionName.ps1")
 }
 
 Export-ModuleMember -Function $publicFunctions
