@@ -40,7 +40,7 @@ Describe 'New-PSDVClientCertificateCredential' {
             $authContext = New-PSDVTestAuthContext -ParameterSetName 'ClientCertificate'
             $authContext.Certificate = $publicOnlyCertificate
 
-            { New-PSDVClientCertificateCredential -AuthContext $authContext } | Should -Throw -ExpectedMessage 'Certificate authentication requires a certificate with an accessible private key'
+            { New-PSDVClientCertificateCredential -AuthContext $authContext } | Should -Throw -ErrorId 'ParameterArgumentValidationError*'
         }
     }
 }

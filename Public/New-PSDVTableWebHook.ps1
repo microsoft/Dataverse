@@ -15,6 +15,7 @@ function New-PSDVTableWebHook {
     The display name for the webhook registration.
 
     .PARAMETER TriggerUri
+    Must be an absolute HTTP(S) URL with a host; relative or unsupported-scheme destinations are rejected at binding.
     The HTTP endpoint URL that will receive webhook notifications when the trigger events occur.
 
     .PARAMETER Operation
@@ -84,14 +85,20 @@ function New-PSDVTableWebHook {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table,
 
         [Parameter(Mandatory)]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $WebHookName,
 
         [Parameter(Mandatory)]
+        [ValidateScript({
+            $uri = $_ -as [uri]
+            $null -ne $uri -and $uri.IsAbsoluteUri -and $uri.Scheme -in @('http', 'https') -and $uri.Host -match '\S'
+        }, ErrorMessage = 'TriggerUri must be an absolute HTTP(S) URL with a host.')]
         [String]
         $TriggerUri,
 
@@ -144,6 +151,14 @@ function New-PSDVTableWebHook {
         [String[]]
         $PostImageAttributes
     )
+
+    foreach ($selection in @('FilteringAttributes', 'PreImageAttributes', 'PostImageAttributes')) {
+        foreach ($column in $PSBoundParameters[$selection]) {
+            if ($column -notmatch '\S') {
+                throw "$selection entries cannot be null, empty, or whitespace."
+            }
+        }
+    }
 
     if ($null -eq $Global:DATAVERSEACCESSTOKEN) {
         throw 'No existing connection to Dataverse Environment, run Connect-PSDVOrg before executing other PSDV cmdlets'
@@ -375,4 +390,3 @@ function New-PSDVTableWebHook {
         throw "Error creating webhook '$WebHookName': $($_.Exception.Message)"
     }
 }
-

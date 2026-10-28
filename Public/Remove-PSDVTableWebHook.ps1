@@ -27,6 +27,7 @@ function Remove-PSDVTableWebHook {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)]
+        [ValidateScript({ $_ -ne [guid]::Empty }, ErrorMessage = 'ServiceEndpointId cannot be an empty GUID.')]
         [Guid]
         $ServiceEndpointId
     )
@@ -93,4 +94,3 @@ function Remove-PSDVTableWebHook {
         throw "Error removing webhook service endpoint '$ServiceEndpointId': $($_.Exception.Message)"
     }
 }
-

@@ -71,17 +71,20 @@ function Get-PSDVTableItem {
         [parameter(Mandatory, ParameterSetName = 'TableLogicalNameItemLookup')]
         [parameter(Mandatory, ParameterSetName = 'TableLogicalNameQuery')]
         [parameter(Mandatory, ParameterSetName = 'TableLogicalNameQueryLegacy')]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table,
 
         [parameter(Mandatory, ParameterSetName = 'TableEntitySetNameItemLookup')]
         [parameter(Mandatory, ParameterSetName = 'TableEntitySetNameQuery')]
         [parameter(Mandatory, ParameterSetName = 'TableEntitySetNameQueryLegacy')]
+        [ValidateNotNullOrWhiteSpace()]
         [string]
         $EntitySet,
 
         [parameter(Mandatory, ParameterSetName = 'TableLogicalNameItemLookup')]
         [parameter(Mandatory, ParameterSetName = 'TableEntitySetNameItemLookup')]
+        [ValidateScript({ $_ -ne [guid]::Empty }, ErrorMessage = 'ItemID cannot be an empty GUID.')]
         [guid]
         $ItemID,
 
@@ -112,6 +115,7 @@ function Get-PSDVTableItem {
 
         [parameter(Mandatory, ParameterSetName = 'TableLogicalNameQueryLegacy')]
         [parameter(Mandatory, ParameterSetName = 'TableEntitySetNameQueryLegacy')]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $FilterQuery,
 
@@ -135,8 +139,12 @@ function Get-PSDVTableItem {
         throw 'No existing connection to Dataverse Environment, run Connect-PSDVOrg before executing other PSDV cmdlets'
     }
 
-    if ($PSBoundParameters.ContainsKey('ItemID') -and $ItemID -eq [Guid]::Empty) {
-        throw 'ItemID cannot be an empty GUID'
+    foreach ($selection in @('Select', 'SelectFields')) {
+        foreach ($column in $PSBoundParameters[$selection]) {
+            if ($column -notmatch '\S') {
+                throw "$selection entries cannot be null, empty, or whitespace."
+            }
+        }
     }
 
     if (($PSCmdlet.ParameterSetName).StartsWith('TableLogicalName')) {
@@ -190,4 +198,3 @@ function Get-PSDVTableItem {
 
     return (Invoke-PSDVWebRequest @invokeParameters)
 }
-

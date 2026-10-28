@@ -49,14 +49,17 @@ function Update-PSDVTableWebHookAuthSecret {
     param(
         [Parameter(Mandatory, ParameterSetName = 'ByName')]
         [Parameter(Mandatory, ParameterSetName = 'ByStepId')]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table,
 
         [Parameter(Mandatory, ParameterSetName = 'ByName')]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $WebHookName,
 
         [Parameter(Mandatory, ParameterSetName = 'ByStepId')]
+        [ValidateScript({ $_ -ne [guid]::Empty }, ErrorMessage = 'WebHookStepId cannot be an empty GUID.')]
         [Guid]
         $WebHookStepId,
 
@@ -194,4 +197,3 @@ function Update-PSDVTableWebHookAuthSecret {
         throw "Error updating webhook auth secret for $errorTarget`: $($_.Exception.Message)"
     }
 }
-

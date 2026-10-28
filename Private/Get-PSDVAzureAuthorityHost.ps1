@@ -2,18 +2,17 @@ function Get-PSDVAzureAuthorityHost {
     [CmdletBinding()]
     param(
         [Parameter()]
+        [AllowEmptyString()]
+        [ValidateScript({
+            $_ -notmatch '\S' -or $_ -in $script:PSDVAzureAuthorityHosts.Keys
+        }, ErrorMessage = 'Unsupported Azure environment.')]
         [String]
         $Environment = 'AzureCloud'
     )
 
-    if ([string]::IsNullOrWhiteSpace($Environment)) {
+    if ($Environment -notmatch '\S') {
         $Environment = 'AzureCloud'
-    }
-
-    if (-not $script:PSDVAzureAuthorityHosts.ContainsKey($Environment)) {
-        throw "Unsupported Azure environment '$Environment'"
     }
 
     return [System.Uri]::new($script:PSDVAzureAuthorityHosts[$Environment])
 }
-

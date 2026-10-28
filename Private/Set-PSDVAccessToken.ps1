@@ -10,6 +10,7 @@ function Set-PSDVAccessToken {
         $AuthContext = $Global:DATAVERSEAUTHCONTEXT,
 
         [Parameter()]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Operation = 'Token acquisition'
     )
@@ -19,8 +20,15 @@ function Set-PSDVAccessToken {
     }
 
     if ($null -eq $AccessToken) {
-        if ($null -ne $Global:DATAVERSEACCESSTOKEN -and ($Global:DATAVERSEACCESSTOKEN.ExpiresOn).AddMinutes(-5) -gt (Get-Date).ToUniversalTime()) {
-            return
+        if ($null -ne $Global:DATAVERSEACCESSTOKEN) {
+            $cachedToken = $Global:DATAVERSEACCESSTOKEN
+            $cachedExpiry = $cachedToken.ExpiresOn -as [DateTimeOffset]
+            if ($cachedToken.Token -isnot [securestring] -or $cachedToken.Token.Length -eq 0 -or $null -eq $cachedExpiry) {
+                throw 'The cached access token must contain a nonempty SecureString Token and valid ExpiresOn.'
+            }
+            if ($cachedExpiry.AddMinutes(-5) -gt [DateTimeOffset](Get-Date)) {
+                return
+            }
         }
 
         if ($AuthContext.ParameterSetName -eq 'AccessToken') {
@@ -41,11 +49,19 @@ function Set-PSDVAccessToken {
         throw "$Operation returned an access token object without a Token value."
     }
 
+    if ($AccessToken.Token -isnot [securestring] -or $AccessToken.Token.Length -eq 0) {
+        throw "$Operation requires a nonempty SecureString Token value."
+    }
+
     if ($propertyNames -notcontains 'ExpiresOn' -or $null -eq $AccessToken.ExpiresOn) {
         throw "$Operation returned an access token object without an ExpiresOn value."
     }
 
-    $expiresOn = ([DateTimeOffset]$AccessToken.ExpiresOn).UtcDateTime
+    $expiration = $AccessToken.ExpiresOn -as [DateTimeOffset]
+    if ($null -eq $expiration) {
+        throw "$Operation requires a valid ExpiresOn value."
+    }
+    $expiresOn = $expiration.UtcDateTime
     if ($expiresOn -le (Get-Date).ToUniversalTime()) {
         throw "$Operation returned an access token that is already expired."
     }

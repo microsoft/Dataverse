@@ -39,24 +39,23 @@ function Remove-PSDVTableItem {
     [CmdletBinding(SupportsShouldProcess)]
     param(
          [parameter(Mandatory, ParameterSetName = 'TableLogicalName')]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table,
 
         [parameter(Mandatory, ParameterSetName = 'TableEntitySetName')]
+        [ValidateNotNullOrWhiteSpace()]
         [string]
         $EntitySet,
 
         [parameter(Mandatory)]
+        [ValidateScript({ $_ -ne [guid]::Empty }, ErrorMessage = 'ItemID cannot be an empty GUID.')]
         [Guid]
         $ItemID
     )
 
     if ($null -eq $Global:DATAVERSEACCESSTOKEN) {
         throw 'No existing connection to Dataverse Environment, run Connect-PSDVOrg before executing other PSDV cmdlets'
-    }
-
-    if ($ItemID -eq [Guid]::Empty) {
-        throw 'ItemID cannot be an empty GUID'
     }
 
 
@@ -75,4 +74,3 @@ function Remove-PSDVTableItem {
         return (Invoke-PSDVWebRequest -WebUri  $dvRequestUri -Headers $requestHeaders -Method 'Delete' )
     }
 }
-

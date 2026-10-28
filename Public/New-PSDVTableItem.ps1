@@ -49,10 +49,12 @@ function New-PSDVTableItem {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [parameter(Mandatory, ParameterSetName = 'TableLogicalName')]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table,
 
         [parameter(Mandatory, ParameterSetName = 'TableEntitySetName')]
+        [ValidateNotNullOrWhiteSpace()]
         [string]
         $EntitySet,
 
@@ -108,4 +110,3 @@ function New-PSDVTableItem {
     }
 
 }
-

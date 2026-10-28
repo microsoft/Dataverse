@@ -48,7 +48,7 @@ Describe 'Get-PSDVAccessToken' {
                 $script:PSDVAzureIdentityLoaded = $true
                 $authContext = New-PSDVTestAuthContext -ParameterSetName 'Unsupported'
 
-                { Get-PSDVAccessToken -AuthContext $authContext } | Should -Throw -ExpectedMessage "Unsupported authentication parameter set 'Unsupported'"
+                { Get-PSDVAccessToken -AuthContext $authContext } | Should -Throw -ErrorId 'ParameterArgumentValidationError*'
             }
             finally {
                 $script:PSDVAzureIdentityLoaded = $originalLoaded

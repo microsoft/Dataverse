@@ -2,12 +2,23 @@ function Get-PSDVFunctionRuntimeManagedIdentityAccessToken {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
+        [ValidateScript({
+            $uri = $_.ResourceUrl -as [uri]
+            $_.ResourceUrl -is [string] -and $null -ne $uri -and $uri.IsAbsoluteUri -and
+                $uri.Scheme -in @('http', 'https') -and $uri.Host -match '\S'
+        }, ErrorMessage = 'AuthContext requires an absolute HTTP(S) ResourceUrl.')]
+        [ValidateScript({
+            $value = $_.ManagedIdentityID
+            $id = $value -as [guid]
+            $value -notmatch '\S' -or ($null -ne $id -and $id -ne [guid]::Empty) -or
+                $value -match '^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.ManagedIdentity/userAssignedIdentities/[^/]+/?$'
+        }, ErrorMessage = 'ManagedIdentityID must be a non-empty GUID or a managed identity resource ID, or omitted for system identity.')]
         [Hashtable]
         $AuthContext
     )
 
     $resource = $AuthContext.ResourceUrl.TrimEnd('/')
-    $managedIdentityID = $AuthContext.ManagedIdentityID
+    $managedIdentityID = [string]$AuthContext.ManagedIdentityID
 
     if (-not [string]::IsNullOrWhiteSpace($env:IDENTITY_ENDPOINT) -and -not [string]::IsNullOrWhiteSpace($env:IDENTITY_HEADER)) {
         $query = [ordered]@{

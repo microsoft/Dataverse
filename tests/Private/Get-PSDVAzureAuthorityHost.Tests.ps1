@@ -21,7 +21,7 @@ Describe 'Get-PSDVAzureAuthorityHost' {
 
     It 'throws for unsupported environments' {
         InModuleScope Dataverse {
-            { Get-PSDVAzureAuthorityHost -Environment 'UnsupportedCloud' } | Should -Throw "Unsupported Azure environment 'UnsupportedCloud'"
+            { Get-PSDVAzureAuthorityHost -Environment 'UnsupportedCloud' } | Should -Throw -ErrorId 'ParameterArgumentValidationError*'
         }
     }
 }

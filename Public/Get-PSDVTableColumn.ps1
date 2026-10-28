@@ -45,6 +45,7 @@ function Get-PSDVTableColumn {
     [CmdletBinding()]
     param(
         [parameter(Mandatory)]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table,
 
@@ -52,6 +53,12 @@ function Get-PSDVTableColumn {
         [String[]]
         $ColumnName
     )
+
+    foreach ($column in $ColumnName) {
+        if ($column -notmatch '\S') {
+            throw 'ColumnName entries cannot be null, empty, or whitespace.'
+        }
+    }
 
     # Build the base URI for the attributes endpoint
     $tableLiteral = ConvertTo-PSDVODataStringLiteral -Value $Table
@@ -123,4 +130,3 @@ function Get-PSDVTableColumn {
         }
     }
 }
-

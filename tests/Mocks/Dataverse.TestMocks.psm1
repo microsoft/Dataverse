@@ -136,7 +136,34 @@ function New-PSDVTestMetadataAttribute {
     }
 }
 
+function New-PSDVTestHttpErrorRecord {
+    [CmdletBinding()]
+    param(
+        [Parameter()]
+        [int]
+        $StatusCode = 412,
+
+        [Parameter()]
+        [AllowEmptyString()]
+        [string]
+        $Content = '{"error":{"code":"0x80060882","message":"Version mismatch"}}'
+    )
+
+    $response = [System.Net.Http.HttpResponseMessage]::new([System.Net.HttpStatusCode]$StatusCode)
+    $response.Content = [System.Net.Http.StringContent]::new($Content)
+    $null = $response.Headers.TryAddWithoutValidation('x-ms-service-request-id', 'request-123')
+    $null = $response.Headers.TryAddWithoutValidation('x-test-values', [string[]]@('first', 'second'))
+    $null = $response.Headers.TryAddWithoutValidation('Retry-After', '5')
+    $exception = [Microsoft.PowerShell.Commands.HttpResponseException]::new("HTTP $StatusCode", $response)
+    $record = [System.Management.Automation.ErrorRecord]::new(
+        $exception, 'NativeHttpError', [System.Management.Automation.ErrorCategory]::InvalidOperation, $null
+    )
+    $record.ErrorDetails = [System.Management.Automation.ErrorDetails]::new($Content)
+    return $record
+}
+
 Export-ModuleMember -Function @(
+    'New-PSDVTestHttpErrorRecord',
     'New-PSDVTestSecureString',
     'New-PSDVTestAccessToken',
     'New-PSDVTestAuthContext',

@@ -9,6 +9,7 @@ function Connect-PSDVOrg {
     Upon successful connection, it retrieves and stores an access token for subsequent Dataverse API calls.
 
     .PARAMETER ClientID
+    Must be a non-empty GUID; invalid values are rejected before credential construction.
     The Application (client) ID of the Azure AD application registration used for service principal authentication.
 
     .PARAMETER ClientSecret
@@ -18,10 +19,12 @@ function Connect-PSDVOrg {
     The X.509 certificate with private key used for service principal authentication.
 
     .PARAMETER CertificateThumbprint
-    The thumbprint of a certificate with private key in the CurrentUser or LocalMachine personal certificate store.
+    The hexadecimal thumbprint of a certificate with private key in the CurrentUser or LocalMachine personal certificate store.
+    Embedded spaces are supported.
 
     .PARAMETER CertificatePath
-    The path to a PFX certificate file used for service principal authentication.
+    A path resolving to one existing certificate file used for service principal authentication.
+    Relative paths and paths containing spaces are supported. Directories and missing files are rejected at binding.
 
     .PARAMETER CertificatePassword
     The optional PFX certificate password.
@@ -33,13 +36,15 @@ function Connect-PSDVOrg {
     When specified, uses the system-assigned managed identity for authentication. No additional identity configuration is required.
 
     .PARAMETER AzureTenantId
-    The Microsoft Entra tenant ID where the Dataverse environment is located. Required for client secret and interactive authentication.
+    The Microsoft Entra tenant ID, domain, or supported tenant alias. Letters, digits, hyphens, and dots are accepted.
+    Required for client secret and interactive authentication.
 
     .PARAMETER SubscriptionId
     Optional legacy parameter retained for compatibility with older examples. It is no longer used because this module no longer connects an Azure subscription context.
 
     .PARAMETER DataverseOrgURL
-    The URL of the Dataverse organization (e.g., https://orgname.crm.dynamics.com/).
+    The absolute HTTP(S) URL of the Dataverse organization (e.g., https://orgname.crm.dynamics.com/).
+    URL validation does not override the underlying authentication transport security requirements.
 
     .PARAMETER Environment
     The Azure cloud authority host to use for OAuth token acquisition. Defaults to AzureCloud.
@@ -55,6 +60,7 @@ function Connect-PSDVOrg {
 
     .PARAMETER AccessTokenExpiresOn
     The expiration time of the supplied access token. If omitted, the expiration is read from the token's 'exp' claim when possible. Provide this value (for example, the ExpiresOn returned by Get-AzAccessToken) when the expiration cannot be determined automatically.
+    An explicitly supplied expiration must be in the future.
 
     .EXAMPLE
     Connect-PSDVOrg -AzureTenantId "12345678-1234-1234-1234-123456789012" -DataverseOrgURL "https://contoso.crm.dynamics.com/"
@@ -100,22 +106,33 @@ function Connect-PSDVOrg {
         [Parameter(Mandatory, ParameterSetName = 'ClientCertificate')]
         [Parameter(Mandatory, ParameterSetName = 'ClientCertificateThumbprint')]
         [Parameter(Mandatory, ParameterSetName = 'ClientCertificatePath')]
+        [ValidateScript({
+            $id = $_ -as [guid]
+            $null -ne $id -and $id -ne [guid]::Empty
+        }, ErrorMessage = 'ClientID must be a non-empty GUID.')]
         [String]
         $ClientID,
 
         [Parameter(Mandatory, ParameterSetName = 'ClientSecret')]
+        [ValidateScript({ $_.Length -gt 0 }, ErrorMessage = 'ClientSecret cannot be empty.')]
         [SecureString]
         $ClientSecret,
 
         [Parameter(Mandatory, ParameterSetName = 'ClientCertificate')]
+        [ValidateScript({ $_.HasPrivateKey }, ErrorMessage = 'Certificate must have a private key.')]
         [System.Security.Cryptography.X509Certificates.X509Certificate2]
         $Certificate,
 
         [Parameter(Mandatory, ParameterSetName = 'ClientCertificateThumbprint')]
+        [ValidatePattern('^\s*(?:[0-9a-fA-F]\s*)+$')]
         [String]
         $CertificateThumbprint,
 
         [Parameter(Mandatory, ParameterSetName = 'ClientCertificatePath')]
+        [ValidateScript({
+            $files = @(Get-Item -Path $_ -ErrorAction Stop)
+            $files.Count -eq 1 -and $files[0] -is [System.IO.FileInfo]
+        }, ErrorMessage = 'CertificatePath must resolve to one existing file.')]
         [String]
         $CertificatePath,
 
@@ -124,6 +141,11 @@ function Connect-PSDVOrg {
         $CertificatePassword,
 
         [Parameter(Mandatory, ParameterSetName = 'ManagedIdentity')]
+        [ValidateScript({
+            $id = $_ -as [guid]
+            ($null -ne $id -and $id -ne [guid]::Empty) -or
+                $_ -match '^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.ManagedIdentity/userAssignedIdentities/[^/]+/?$'
+        }, ErrorMessage = 'ManagedIdentityID must be a non-empty GUID or a managed identity resource ID.')]
         [String]
         $ManagedIdentityID,
 
@@ -136,6 +158,7 @@ function Connect-PSDVOrg {
         [Parameter(Mandatory, ParameterSetName = 'ClientCertificateThumbprint')]
         [Parameter(Mandatory, ParameterSetName = 'ClientCertificatePath')]
         [Parameter(Mandatory, ParameterSetName = 'InteractiveLogin')]
+        [ValidatePattern('^[A-Za-z0-9.-]+$')]
         [String]
         $AzureTenantId,
 
@@ -144,6 +167,10 @@ function Connect-PSDVOrg {
         $SubscriptionId,
 
         [Parameter(Mandatory)]
+        [ValidateScript({
+            $uri = $_ -as [uri]
+            $null -ne $uri -and $uri.IsAbsoluteUri -and $uri.Scheme -in @('http', 'https') -and $uri.Host -match '\S'
+        }, ErrorMessage = 'DataverseOrgURL must be an absolute HTTP(S) URL with a host.')]
         [String]
         $DataverseOrgURL,
 
@@ -163,10 +190,12 @@ function Connect-PSDVOrg {
         $ManagedIdentityTokenSource = 'AzureIdentity',
 
         [Parameter(Mandatory, ParameterSetName = 'AccessToken')]
+        [ValidateScript({ $_.Length -gt 0 }, ErrorMessage = 'AccessToken cannot be empty.')]
         [SecureString]
         $AccessToken,
 
         [Parameter(ParameterSetName = 'AccessToken')]
+        [ValidateScript({ $_ -gt [DateTimeOffset](Get-Date) }, ErrorMessage = 'AccessTokenExpiresOn must be in the future.')]
         [DateTimeOffset]
         $AccessTokenExpiresOn
     )
@@ -252,4 +281,3 @@ function Connect-PSDVOrg {
     }
 
 }
-

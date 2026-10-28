@@ -6,16 +6,16 @@ A comprehensive PowerShell module for interacting with Microsoft Dataverse envir
 
 - **Multiple Authentication Methods**: Support for Service Principal, Managed Identity, and Interactive authentication
 - **Comprehensive CRUD Operations**: Create, Read, Update, and Delete operations for Dataverse records
-- **Advanced Querying**: OData filters, field selection, record expansion, and automatic pagination
+- **Advanced Querying**: OData filters, field selection, record expansion, automatic pagination, and page-by-page streaming for large queries
 - **Metadata Operations**: Retrieve table and column metadata information
 - **Audit and Change Tracking**: Access audit history and detailed change tracking
 - **Webhook Management**: Register, inspect, update, and remove Dataverse table webhooks
-- **PowerShell 7.3+ Compatible**: Modern PowerShell support
+- **PowerShell 7.6+ Compatible**: Modern PowerShell support
 - **PSScriptAnalyzer Compliant**: Follows PowerShell best practices and coding standards
 
 ## Prerequisites
 
-- PowerShell 7.3 or later
+- PowerShell 7.6 or later (version 1.1.1 is the latest release that supports PowerShell 7.3-7.5; install it with `Install-Module Dataverse -RequiredVersion 1.1.1`)
 - Appropriate permissions to access your Dataverse environment
 
 The module bundles a pinned Azure.Identity SDK dependency set under `lib/netstandard2.0`, so client machines do not need Az.Accounts or NuGet package installation for authentication. Managed identity authentication can optionally use the Azure Functions/App Service runtime endpoint directly to avoid loading Azure.Identity in hosts that already load conflicting MSAL or identity assemblies.
@@ -174,6 +174,12 @@ $accountData = @{
     telephone1 = "555-123-4567"
 }
 New-PSDVTableItem -Table "account" -ItemData $accountData
+
+$batchCreates = @(
+    @{ ItemData = @{ name = "First Company"; accountnumber = "ACC001" } },
+    @{ ItemData = @{ name = "Second Company"; accountnumber = "ACC002" } }
+)
+$batchCreateResult = New-PSDVTableItemBatch -Table "account" -Items $batchCreates
 ```
 
 #### Update Records
@@ -184,7 +190,38 @@ $updateData = @{
     telephone1 = "555-987-6543"
 }
 Update-PSDVTableItem -Table "account" -ItemID "record-guid" -ItemData $updateData
+
+$upsertData = @{
+    accountnumber = "ACC001"
+    name = "Upserted Company Name"
+}
+Invoke-PSDVTableItemUpsert -Table "account" -AlternateKeyColumnName "accountnumber" -ItemData $upsertData
+
+Invoke-PSDVTableItemUpsert -Table "account" `
+                          -AlternateKeyColumnName "accountnumber" `
+                          -AlternateKeyValue "ACC003" `
+                          -ItemData @{ name = "Create Only Company" } `
+                          -CreateOnly
+
+$batchUpdates = @(
+    @{ ItemID = "first-record-guid"; ItemData = @{ name = "First Updated Company" } },
+    @{ ItemID = "second-record-guid"; ItemData = @{ name = "Second Updated Company" } }
+)
+$batchUpdateResult = Update-PSDVTableItemBatch -Table "account" -Updates $batchUpdates
+
+$batchUpserts = @(
+    @{ AlternateKeyValue = "ACC001"; ItemData = @{ name = "First Upserted Company" } },
+    @{ ItemData = @{ accountnumber = "ACC002"; name = "Second Upserted Company" } }
+)
+$batchUpsertResult = Invoke-PSDVTableItemUpsertBatch -Table "account" -AlternateKeyColumnName "accountnumber" -Items $batchUpserts
+
+$batchCreateOnlyResult = Invoke-PSDVTableItemUpsertBatch -Table "account" `
+                                                        -AlternateKeyColumnName "accountnumber" `
+                                                        -Items $batchUpserts `
+                                                        -CreateOnly
 ```
+
+Batch commands return categorized per-request status results. Status codes `200`, `201`, and `204` count as `Created`; `409` and `412` count as `AlreadyExists`; all other or missing per-request statuses count as `Failed`.
 
 #### Delete Records
 
@@ -221,10 +258,14 @@ Access tokens are refreshed automatically by Dataverse operations when they are 
 
 ### Core Operations
 
-- `Invoke-PSDVWebRequest` - Execute authenticated web requests
+- `Invoke-PSDVWebRequest` - Execute authenticated web requests, with optional `-MaxPageSize` and `-AsPages` support for large paged result sets, and `-SkipHttpErrorCheck` to inspect HTTP error responses
 - `Get-PSDVTableItem` - Retrieve records from tables
 - `New-PSDVTableItem` - Create new records
-- `Update-PSDVTableItem` - Update existing records
+- `Update-PSDVTableItem` - Update records, optionally conditioned on an opaque ETag with `-IfMatch`
+- `Invoke-PSDVTableItemUpsert` - Upsert one record by alternate key, with optional create-only behavior
+- `New-PSDVTableItemBatch` - Create multiple records in one Dataverse batch request
+- `Update-PSDVTableItemBatch` - Update multiple records by ID in one Dataverse batch request
+- `Invoke-PSDVTableItemUpsertBatch` - Upsert multiple records by alternate key in one Dataverse batch request
 - `Remove-PSDVTableItem` - Delete records
 
 ### Metadata Functions
@@ -256,6 +297,160 @@ Get-PSDVTableItem -Table "account" `
                   -Expand "primarycontactid" `
                   -Select @("name", "revenue", "primarycontactid")
 ```
+
+### Large Query Page Streaming
+
+Use `-MaxPageSize` to request a Dataverse OData page size and `-AsPages` to process each page before the next page is requested. Each page object includes `PageNumber`, `Count`, `Results`, and `NextLink`.
+
+```powershell
+Invoke-PSDVWebRequest -WebUri "accounts" -MaxPageSize 1000 -AsPages | ForEach-Object {
+    $page = $_
+
+    foreach ($account in $page.Results) {
+        # Process this page before the next Dataverse page is requested
+        $account.name
+    }
+}
+```
+
+### Handling Expected HTTP Errors
+
+HTTP errors throw by default. Use `-SkipHttpErrorCheck -ReturnRawResponse` to inspect a non-success response's `StatusCode`, `Headers`, and unchanged body in `Content`. For example, a conditional PATCH can return HTTP 412 when another process has changed the record:
+
+```powershell
+$response = Invoke-PSDVWebRequest `
+    -WebUri "accounts($accountId)" `
+    -Method Patch `
+    -Headers @{ 'If-Match' = $etag } `
+    -Body @{ description = 'Updated description' } `
+    -ReturnRawResponse `
+    -SkipHttpErrorCheck
+
+if ($response.StatusCode -eq 412) {
+    Write-Warning 'Another process changed the row; skip or reconcile.'
+}
+elseif ($response.StatusCode -ge 400) {
+    throw "Dataverse returned HTTP $($response.StatusCode): $($response.Content)"
+}
+```
+
+The switch only skips HTTP-status error checks; transport failures (such as connection failures or timeouts) still throw. Omitting the switch or passing `-SkipHttpErrorCheck:$false` preserves the default behavior.
+
+`-SkipHttpErrorCheck` can also be used without `-ReturnRawResponse`. Normal JSON parsing, collection, and page-output rules still apply, including parsing errors for non-JSON bodies. It is forwarded on both the initial request and subsequent pagination requests.
+
+### ETag-Based Optimistic Concurrency
+
+Use the row's `@odata.etag` unchanged to avoid overwriting a concurrent edit. Both `-Table` and `-EntitySet` support `-IfMatch`.
+
+```powershell
+$row = Get-PSDVTableItem -EntitySet accounts -ItemID $accountId
+
+try {
+    $updatedRow = Update-PSDVTableItem `
+        -EntitySet accounts `
+        -ItemID $accountId `
+        -ItemData @{ name = 'Updated name' } `
+        -IfMatch $row.'@odata.etag' `
+        -ReturnItem `
+        -ErrorAction Stop
+
+    $newETag = $updatedRow.'@odata.etag'
+}
+catch {
+    if ($_.FullyQualifiedErrorId -like 'PSDVPreconditionFailed*') {
+        $details = $_.Exception.Data['PSDVHttpError']
+        Write-Warning "Concurrency conflict (HTTP $($details.HttpStatusCode)); skip or reconcile."
+    }
+    else {
+        throw
+    }
+}
+```
+
+| `-IfMatch` value | Meaning |
+| --- | --- |
+| Specific ETag, such as `W/"123456"` | Update only the retrieved row version. Dataverse optimistic concurrency must be enabled for the table. |
+| `*` | Update only if the row exists. This does **not** prevent overwriting intervening edits. A missing row returns HTTP 404 rather than being created. |
+| Omitted | Preserve the existing unconditional request behavior. |
+
+Explicit null, empty, and whitespace-only conditions are rejected before any request. ETags are opaque: the module does not trim, quote, or convert the supplied value. Existing field validation, lookup parsing, and `-WhatIf` behavior remain supported; `-WhatIf` prevents the PATCH but can still read metadata.
+
+`-ReturnItem` requests `Prefer: odata.include-annotations="*",return=representation`. With `-IfMatch`, the returned PATCH body must contain the persisted row and a nonblank string `@odata.etag`. The module does not mutate the original row, fabricate an ETag, or issue a follow-up GET that could observe another writer. Missing representations or ETags terminate with `PSDVUpdateRepresentationMissing` or `PSDVUpdateETagMissing`. **The write may already have succeeded when response validation fails.** Unconditional `-ReturnItem` behavior is unchanged.
+
+Conditional writes are never automatically retried, refreshed with a newer ETag, or downgraded to unconditional writes. A connection failure or timeout can occur after a write commits; it does not confirm success or a concurrency conflict. The application owns re-reading and deciding whether its business operation can safely resume. Blind replay can return HTTP 412 even if the original attempt succeeded.
+
+### Structured Request Errors
+
+By default, `Invoke-PSDVWebRequest` raises terminating PowerShell error records for HTTP failures. Update commands preserve this contract. Match `FullyQualifiedErrorId` prefixes, since PowerShell may append command context:
+
+| Error ID prefix | Meaning |
+| --- | --- |
+| `PSDVPreconditionFailed` | HTTP 412; category `ResourceBusy`. |
+| `PSDVHttpError` | Other HTTP failures; category `InvalidOperation`. Inspect the numeric status to distinguish 401, 403, 404, 429, and server failures. |
+| `PSDVWebRequestFailed` | Request/transport failure without a received HTTP response; no fabricated HTTP status. |
+
+For HTTP failures, `$_.Exception.Data['PSDVHttpError']` contains:
+
+| Property | Contract |
+| --- | --- |
+| `HttpStatusCode` | Integer HTTP status code. |
+| `DataverseErrorCode` | Server `error.code` string, or null when absent. |
+| `DataverseErrorMessage` | Server `error.message` string, or null when absent. |
+| `ResponseHeaders` | Case-insensitive dictionary of header names to string arrays, including diagnostic response/content headers and `Retry-After` when supplied. |
+| `ResponseBody` | Response text, including non-JSON content; native error details are used when content is unavailable. |
+| `Method` | Effective method of the failed request. |
+| `RequestUri` | Failed request URI, including the actual continuation URI for pagination failures. |
+
+For example, inside a catch block:
+
+```powershell
+$details = $_.Exception.Data['PSDVHttpError']
+if ($null -ne $details) {
+    $details.HttpStatusCode
+    $details.DataverseErrorCode
+    $details.DataverseErrorMessage
+    $details.ResponseHeaders['x-ms-service-request-id']
+}
+$originalException = $_.Exception.InnerException
+```
+
+The original native request exception is retained as `InnerException`; outgoing authorization headers and bearer tokens are not copied into the structured data. Empty or malformed HTTP error bodies do not replace the HTTP failure with a JSON parsing error. Ordinary successful-response JSON parsing errors remain distinct.
+
+This improves the previous string-only error API: error IDs and structured exception data are now documented, while exception-message text is not a stable contract. Requests still throw by default. `-SkipHttpErrorCheck` and `-ReturnRawResponse` retain their existing behavior; bypassing the HTTP check returns the response through normal handling rather than creating a structured HTTP error.
+
+### Running Concurrency Tests
+
+The focused unit tests use deterministic HTTP fixtures and a stateful competing-writer mock:
+
+```powershell
+Import-Module Pester -MinimumVersion 5.0
+Invoke-Pester -Path .\tests\Private\New-PSDVWebRequestErrorRecord.Tests.ps1,
+    .\tests\Public\Invoke-PSDVWebRequest.Tests.ps1,
+    .\tests\Public\Update-PSDVTableItem.Tests.ps1
+```
+
+The Integration-tagged test is skipped by default. It creates and deletes uniquely identified test-owned rows and launches two workers using the same original ETag. Use **only a disposable Dataverse test environment**, with a dedicated table that has optimistic concurrency enabled and permits creation with its primary ID and one writable text column. It must not require additional fields or plug-in side effects.
+
+Before opting in, configure these process environment variables through your local secret-management or CI mechanism:
+
+| Variable | Required value |
+| --- | --- |
+| `PSDV_INTEGRATION_ORG_URL` | Test organization's HTTPS URL. |
+| `PSDV_INTEGRATION_ACCESS_TOKEN` | Short-lived bearer JWT for that organization, with enough remaining validity and test-table permissions. Do not commit or log it. |
+| `PSDV_INTEGRATION_ENTITY_SET` | Dedicated test table's entity set name. |
+| `PSDV_INTEGRATION_TEXT_COLUMN` | Writable text column used for test payloads. |
+
+```powershell
+$env:PSDV_RUN_INTEGRATION_TESTS = '1'
+try {
+    Invoke-Pester -Path .\tests\Integration\Update-PSDVTableItem.Concurrency.Tests.ps1 -Tag Integration
+}
+finally {
+    Remove-Item Env:\PSDV_RUN_INTEGRATION_TESTS
+}
+```
+
+Explicit opt-in with missing prerequisites fails clearly. A skipped live test is not evidence that server-side concurrency was verified.
 
 ### Working with Lookup Fields
 
@@ -311,6 +506,24 @@ Remove-PSDVTableWebHook -ServiceEndpointId $webhook.ServiceEndpointId
 
 Webhook registration supports pre-operation and post-operation stages, synchronous or asynchronous mode, update filtering attributes, and pre/post images for supported operations.
 
+## Input Validation
+
+Public and private functions validate arguments using native PowerShell parameter types and validation attributes wherever possible. Required names and request paths must not be blank; record, webhook-step, and service-endpoint GUIDs must not be the zero GUID. Existing enum choices and numeric limits still apply.
+
+- Organization and webhook destination URLs must be absolute HTTP(S) URLs with a host. Request `-WebUri` still accepts full URLs, relative API paths, resource names, and OData queries. Shape validation does not override PowerShell's authentication transport security requirements; use HTTPS for Dataverse.
+- Client IDs must be non-empty GUIDs. Tenant IDs continue to support tenant domains and aliases, not just GUIDs. Managed identity inputs support non-empty GUIDs and user-assigned managed identity resource IDs.
+- Certificate paths must resolve to one existing file; relative and spaced paths are supported. Certificate objects must have a private key, and thumbprints must be hexadecimal (embedded spaces are supported). Certificate lookup, file decoding/password errors, and actual key access remain runtime checks.
+- Required access tokens and client secrets cannot be empty. Optional empty certificate passwords remain supported. Omitting `-AuthSecret` or supplying an empty/null value to `Update-PSDVTableWebHookAuthSecret` still clears the secret.
+- Explicit `-AccessTokenExpiresOn` values must be in the future. Acquired/cached tokens are also checked at runtime before use.
+- Optional selection/attribute lists can still be omitted, null, or empty. Supplied entries must not be null, empty, or whitespace-only. Optional empty query/filter values retain their prior handling; a mandatory legacy `-FilterQuery` must not be blank.
+- Empty payload/header/metadata dictionaries remain supported where they were previously valid, and payload fields can still be null to clear values. ETags and alternate-key values are not trimmed or reformatted.
+- Empty batch arrays still return an empty result without HTTP. Native mandatory-array binding continues to reject null arrays and null entries. Non-null malformed entries and nested update GUIDs are checked before metadata or request submission.
+- Private helpers retain intentional allowances: empty strings in literal/XML escaping, blank cloud names defaulting to AzureCloud, null batch responses used for empty/WhatIf results, optional selector fallback, and null token inputs that trigger acquisition/refresh.
+
+Invalid scalar arguments now generally raise PowerShell parameter-binding/validation errors before the function body, including with `-WhatIf`. This intentionally replaces some previous custom runtime exceptions or SDK/.NET argument exceptions. Do not rely on exact localized validation message text.
+
+Compound, nullable-list, cross-parameter, metadata, service-response, and environment-dependent rules remain explicit runtime checks where attributes cannot preserve the existing contract. These checks use native PowerShell comparisons/path commands rather than relying on a downstream .NET failure. Authentication, transport, and structured HTTP/concurrency failures remain separate from input validation.
+
 ## Error Handling
 
 The module includes comprehensive error handling with meaningful error messages. Common patterns:
@@ -347,11 +560,19 @@ catch {
 Get-PSDVTableItem -Table "account" -Verbose
 ```
 
+## Releasing
+
+Pull requests targeting `dev` or `main` run the Pester suite on Windows and Ubuntu (`.github/workflows/ci.yml`). Publishing to the [PowerShell Gallery](https://www.powershellgallery.com/packages/Dataverse/) is automated by `.github/workflows/publish.yml`:
+
+1. In a pull request, update `ModuleVersion` in `Dataverse.psd1` (and the release notes), and merge it to `main`.
+2. Create a GitHub Release from `main` with the tag `v<ModuleVersion>` (for example `v1.2.0`). Prereleases are ignored.
+3. The workflow reruns the tests, verifies that the tag matches the manifest version, that the commit is on `main`, and that the version is not already on the Gallery, then publishes only the module files (`Dataverse.psd1`, `Dataverse.psm1`, `LICENSE`, `Public`, `Private`, `lib`).
+
 ## Contributing
 
 This module follows PowerShell best practices and PSScriptAnalyzer rules. When contributing:
 
-1. Ensure PowerShell 7.3+ compatibility
+1. Ensure PowerShell 7.6+ compatibility
 2. Follow the existing code style and patterns
 3. Include comprehensive help documentation
 4. Test in both normal and Constrained Language Mode environments
@@ -365,6 +586,19 @@ This project is licensed under the terms in [LICENSE](LICENSE).
 This software is provided as-is, without warranty or guaranteed support. If you find a bug, have a question, or want to request an enhancement, open an issue in the GitHub repository with the module version, PowerShell version, and enough detail to reproduce the behavior.
 
 ## Changelog
+
+### Version 1.2.0
+
+- **Requires PowerShell 7.6 or later.** Version 1.1.1 is the latest release that supports PowerShell 7.3-7.5.
+- Added alternate-key upsert support with `Invoke-PSDVTableItemUpsert` and optional create-only behavior.
+- Added batch create, update, and upsert commands for Dataverse table records.
+- Added categorized batch results for created, already-existing, and failed outcomes.
+- Added configurable page sizes and page-by-page result streaming for large Dataverse queries.
+- Improved JSON payload serialization depth for Dataverse web requests.
+- Added `Invoke-PSDVWebRequest -AsCollection` and `-SkipHttpErrorCheck`.
+- Added `Update-PSDVTableItem -IfMatch` for ETag-conditional updates.
+- Added structured HTTP error IDs: `PSDVPreconditionFailed`, `PSDVHttpError`, and `PSDVWebRequestFailed`.
+- Applied native PowerShell parameter validation across all public and private functions.
 
 ### Version 1.1.1
 

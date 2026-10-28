@@ -32,10 +32,12 @@ function Get-PSDVTableItemAuditHistory {
     [CmdletBinding()]
     param(
         [parameter(Mandatory)]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table,
 
         [parameter(Mandatory)]
+        [ValidateScript({ $_ -ne [guid]::Empty }, ErrorMessage = 'ItemID cannot be an empty GUID.')]
         [Guid]
         $ItemID,
 
@@ -48,8 +50,10 @@ function Get-PSDVTableItemAuditHistory {
         throw 'No existing connection to Dataverse Environment, run Connect-PSDVOrg before executing other PSDV cmdlets'
     }
 
-    if ($ItemID -eq [Guid]::Empty) {
-        throw 'ItemID cannot be an empty GUID'
+    foreach ($column in $Select) {
+        if ($column -notmatch '\S') {
+            throw 'Select entries cannot be null, empty, or whitespace.'
+        }
     }
 
     $requestHeaders = @{'Prefer' = 'odata.include-annotations="*"' }
@@ -75,4 +79,3 @@ function Get-PSDVTableItemAuditHistory {
     return (Invoke-PSDVWebRequest @invokeParameters)
 
 }
-

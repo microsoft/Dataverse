@@ -27,6 +27,7 @@ function Get-PSDVTableDetail {
     [CmdletBinding()]
     param(
         [parameter(Mandatory)]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table
     )
@@ -70,4 +71,3 @@ function Get-PSDVTableDetail {
 
     return $tableDetailsWithFields
 }
-

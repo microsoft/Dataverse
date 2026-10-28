@@ -2,13 +2,20 @@ function New-PSDVManagedIdentityCredential {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
+        [ValidateScript({
+            $value = $_.ManagedIdentityID
+            $id = $value -as [guid]
+            $value -notmatch '\S' -or ($null -ne $id -and $id -ne [guid]::Empty) -or
+                $value -match '^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.ManagedIdentity/userAssignedIdentities/[^/]+/?$'
+        }, ErrorMessage = 'ManagedIdentityID must be a non-empty GUID or a managed identity resource ID, or omitted for system identity.')]
         [Hashtable]
         $AuthContext
     )
 
-    $managedIdentityID = $AuthContext.ManagedIdentityID
+    Import-PSDVAzureIdentityAssemblies
+    $managedIdentityID = [string]$AuthContext.ManagedIdentityID
 
-    if ([string]::IsNullOrWhiteSpace($managedIdentityID)) {
+    if ($managedIdentityID -notmatch '\S') {
         return [Azure.Identity.ManagedIdentityCredential]::new()
     }
 
@@ -19,4 +26,3 @@ function New-PSDVManagedIdentityCredential {
 
     return [Azure.Identity.ManagedIdentityCredential]::new($managedIdentityID)
 }
-

@@ -14,7 +14,11 @@ function Confirm-PSDVItemDataAttributes {
         $ItemData
     )
 
-    if ([string]::IsNullOrWhiteSpace($Table)) {
+    if ($Table -notmatch '\S' -and $EntitySet -notmatch '\S') {
+        throw 'A nonblank Table or EntitySet is required.'
+    }
+
+    if ($Table -notmatch '\S') {
         $entitySetLiteral = ConvertTo-PSDVODataStringLiteral -Value $EntitySet
         $Table = (Invoke-PSDVWebRequest -WebUri 'EntityDefinitions' -Filter "EntitySetName eq $entitySetLiteral" -Select 'LogicalName').LogicalName
     }

@@ -1,0 +1,114 @@
+name: Publish to PowerShell Gallery
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: Run all checks and stage the package, but do not publish
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish
+    needs: test
+    runs-on: windows-latest
+    concurrency:
+      group: publish-powershell-gallery
+      cancel-in-progress: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure PowerShell 7.6 or later
+        shell: pwsh
+        run: |
+          if ($PSVersionTable.PSVersion -ge [version]'7.6') { return }
+          $destination = Join-Path $env:RUNNER_TEMP 'pwsh76'
+          $script = Join-Path $env:RUNNER_TEMP 'install-powershell.ps1'
+          Invoke-WebRequest -Uri 'https://aka.ms/install-powershell.ps1' -OutFile $script
+          & $script -Version '7.6.9' -Destination $destination
+          Add-Content -Path $env:GITHUB_PATH -Value $destination
+
+      - name: Validate release
+        id: validate
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ($PSVersionTable.PSVersion -lt [version]'7.6') { throw 'PowerShell 7.6 or later is required.' }
+          $manifest = Test-ModuleManifest -Path ./Dataverse.psd1
+          $version = $manifest.Version.ToString()
+
+          if ($env:EVENT_NAME -eq 'release') {
+            if ($env:RELEASE_TAG -ne "v$version") {
+              throw "Release tag '$($env:RELEASE_TAG)' does not match manifest version 'v$version'."
+            }
+            git fetch origin main --quiet
+            git merge-base --is-ancestor HEAD origin/main
+            if ($LASTEXITCODE -ne 0) {
+              throw 'The released commit is not reachable from main. Releases must be created from main.'
+            }
+          }
+
+          $existing = Find-PSResource -Name Dataverse -Version $version -Repository PSGallery -ErrorAction SilentlyContinue
+          if ($existing) {
+            throw "Dataverse $version is already published to the PowerShell Gallery. Bump ModuleVersion and create a new release."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Stage module package
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'package' 'Dataverse'
+          New-Item -Path $stage -ItemType Directory -Force | Out-Null
+          Copy-Item -Path Dataverse.psd1, Dataverse.psm1, LICENSE, Public, Private, lib -Destination $stage -Recurse
+          Test-ModuleManifest -Path (Join-Path $stage 'Dataverse.psd1') | Format-List Name, Version
+          Import-Module (Join-Path $stage 'Dataverse.psd1') -Force
+          if ((Get-Command -Module Dataverse).Count -lt 1) { throw 'Staged module exported no commands.' }
+          Remove-Module Dataverse
+          Get-ChildItem $stage -Recurse -File | Measure-Object | ForEach-Object { "Staged $($_.Count) files." }
+          "PACKAGE_PATH=$stage" >> $env:GITHUB_ENV
+
+      - name: Publish to PowerShell Gallery
+        if: github.event_name == 'release' || inputs.dryRun == false
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.PSGALLERYAPI }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) { throw 'Secret PSGALLERYAPI is not set.' }
+          Publish-Module -Path $env:PACKAGE_PATH -NuGetApiKey $env:NUGET_API_KEY -Repository PSGallery
+
+      - name: Dry run summary
+        if: github.event_name == 'workflow_dispatch' && inputs.dryRun
+        shell: pwsh
+        run: |
+          Write-Host "Dry run: Dataverse ${{ steps.validate.outputs.version }} was validated and staged but not published."
+
+      - name: Verify publication
+        if: github.event_name == 'release' || inputs.dryRun == false
+        shell: pwsh
+        env:
+          PUBLISHED_VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          $found = $null
+          foreach ($attempt in 1..10) {
+            $found = Find-PSResource -Name Dataverse -Version $env:PUBLISHED_VERSION -Repository PSGallery -ErrorAction SilentlyContinue
+            if ($found) { break }
+            Start-Sleep -Seconds 30
+          }
+          if (-not $found) { throw "Dataverse $($env:PUBLISHED_VERSION) was not found on the PowerShell Gallery after publishing." }
+          Write-Host "Dataverse $($found.Version) is available on the PowerShell Gallery."

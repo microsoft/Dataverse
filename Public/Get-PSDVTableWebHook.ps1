@@ -61,6 +61,7 @@ function Get-PSDVTableWebHook {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
+        [ValidateNotNullOrWhiteSpace()]
         [String]
         $Table,
 
@@ -197,4 +198,3 @@ function Get-PSDVTableWebHook {
         throw "Error retrieving webhooks for table '$Table': $($_.Exception.Message)"
     }
 }
-

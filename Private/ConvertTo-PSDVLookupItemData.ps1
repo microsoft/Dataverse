@@ -6,9 +6,32 @@ function ConvertTo-PSDVLookupItemData {
         $ItemData,
 
         [Parameter(Mandatory)]
+        [ValidateScript({
+            foreach ($attribute in $_.Keys) {
+                if ($attribute -like '*@odata.bind') {
+                    continue
+                }
+                $detail = $_[$attribute]
+                if ($null -eq $detail -or $detail.AttributeType -notmatch '\S') {
+                    return $false
+                }
+                if ($detail.AttributeType -eq 'Lookup' -and
+                    ($detail.SchemaName -notmatch '\S' -or $detail.Targets -isnot [System.Collections.IList] -or
+                        $detail.Targets.Count -eq 0 -or $detail.Targets[0] -notmatch '\S')) {
+                    return $false
+                }
+            }
+            return $true
+        }, ErrorMessage = 'AttributeDetails must include attribute types and lookup navigation names and targets.')]
         [System.Collections.Hashtable]
         $AttributeDetails
     )
+
+    foreach ($attribute in $ItemData.Keys) {
+        if (-not $AttributeDetails.ContainsKey($attribute)) {
+            throw "AttributeDetails is missing metadata for '$attribute'."
+        }
+    }
 
     $parsedItemData = @{}
 
