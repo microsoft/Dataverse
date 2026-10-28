@@ -1,33 +1,29 @@
-name: Publish to PowerShell Gallery
+name: Package and publish release
 
 on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      dryRun:
-        description: Run all checks and stage the package, but do not publish
-        type: boolean
-        default: true
 
 permissions:
   contents: read
 
 jobs:
   test:
-    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
     uses: ./.github/workflows/ci.yml
 
   publish:
     name: Publish
     needs: test
     runs-on: windows-latest
+    permissions:
+      contents: write
     concurrency:
       group: publish-powershell-gallery
       cancel-in-progress: false
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
@@ -47,33 +43,41 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           if ($PSVersionTable.PSVersion -lt [version]'7.6') { throw 'PowerShell 7.6 or later is required.' }
           $manifest = Test-ModuleManifest -Path ./Dataverse.psd1
           $version = $manifest.Version.ToString()
+          $prerelease = $manifest.PrivateData.PSData.Prerelease
+          $fullVersion = if ($prerelease) { "$version-$prerelease" } else { $version }
 
           if ($env:EVENT_NAME -eq 'release') {
-            if ($env:RELEASE_TAG -ne "v$version") {
-              throw "Release tag '$($env:RELEASE_TAG)' does not match manifest version 'v$version'."
+            if ($env:RELEASE_TAG -cne "v$fullVersion") {
+              throw "Release tag '$($env:RELEASE_TAG)' does not match manifest version 'v$fullVersion'."
             }
-            git fetch origin main --quiet
-            git merge-base --is-ancestor HEAD origin/main
-            if ($LASTEXITCODE -ne 0) {
-              throw 'The released commit is not reachable from main. Releases must be created from main.'
+            if (($env:IS_PRERELEASE -eq 'true') -ne [bool]$prerelease) {
+              throw 'The GitHub prerelease flag must match the manifest PSData.Prerelease value.'
             }
-          }
-
-          $existing = Find-PSResource -Name Dataverse -Version $version -Repository PSGallery -ErrorAction SilentlyContinue
-          if ($existing) {
-            throw "Dataverse $version is already published to the PowerShell Gallery. Bump ModuleVersion and create a new release."
+            if ($env:IS_PRERELEASE -ne 'true') {
+              git fetch origin main --quiet
+              if ($LASTEXITCODE -ne 0) { throw 'Could not fetch main to validate the release.' }
+              git merge-base --is-ancestor HEAD origin/main
+              if ($LASTEXITCODE -ne 0) {
+                throw 'The released commit is not reachable from main. Stable releases must be created from main.'
+              }
+            }
           }
 
           "version=$version" >> $env:GITHUB_OUTPUT
+          "fullVersion=$fullVersion" >> $env:GITHUB_OUTPUT
 
       - name: Stage module package
         shell: pwsh
+        env:
+          MODULE_VERSION: ${{ steps.validate.outputs.version }}
         run: |
-          $stage = Join-Path $env:RUNNER_TEMP 'package' 'Dataverse'
+          $root = Join-Path $env:RUNNER_TEMP 'package'
+          $stage = Join-Path $root 'Dataverse' $env:MODULE_VERSION
           New-Item -Path $stage -ItemType Directory -Force | Out-Null
           Copy-Item -Path Dataverse.psd1, Dataverse.psm1, LICENSE, Public, Private, lib -Destination $stage -Recurse
           Test-ModuleManifest -Path (Join-Path $stage 'Dataverse.psd1') | Format-List Name, Version
@@ -82,9 +86,56 @@ jobs:
           Remove-Module Dataverse
           Get-ChildItem $stage -Recurse -File | Measure-Object | ForEach-Object { "Staged $($_.Count) files." }
           "PACKAGE_PATH=$stage" >> $env:GITHUB_ENV
+          "PACKAGE_ROOT=$root" >> $env:GITHUB_ENV
+
+      - name: Build module ZIP and checksum
+        shell: pwsh
+        env:
+          FULL_VERSION: ${{ steps.validate.outputs.fullVersion }}
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "Dataverse-$($env:FULL_VERSION).zip"
+          Compress-Archive -Path (Join-Path $env:PACKAGE_ROOT 'Dataverse') -DestinationPath $zip -Force
+          $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path $zip -Leaf)" | Set-Content -Path "$zip.sha256" -Encoding ascii
+          "PACKAGE_ZIP=$zip" >> $env:GITHUB_ENV
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Dataverse-${{ steps.validate.outputs.fullVersion }}
+          path: |
+            ${{ env.PACKAGE_ZIP }}
+            ${{ env.PACKAGE_ZIP }}.sha256
+          if-no-files-found: error
+
+      - name: Attach package to GitHub Release
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload $env:RELEASE_TAG $env:PACKAGE_ZIP "$($env:PACKAGE_ZIP).sha256" --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to upload module assets to the GitHub Release.' }
+
+      - name: Check Gallery version
+        if: github.event_name == 'release' && !github.event.release.prerelease
+        shell: pwsh
+        env:
+          MODULE_VERSION: ${{ steps.validate.outputs.version }}
+        run: |
+          $uri = "https://www.powershellgallery.com/api/v2/Packages(Id='Dataverse',Version='$($env:MODULE_VERSION)')"
+          $response = Invoke-WebRequest -Uri $uri -SkipHttpErrorCheck
+          if ($response.StatusCode -eq 200) {
+            throw "Dataverse $($env:MODULE_VERSION) is already published. Gallery versions cannot be overwritten."
+          }
+          if ($response.StatusCode -ne 404) {
+            throw "Gallery version check failed with HTTP $($response.StatusCode)."
+          }
 
       - name: Publish to PowerShell Gallery
-        if: github.event_name == 'release' || inputs.dryRun == false
+        if: github.event_name == 'release' && !github.event.release.prerelease
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ secrets.PSGALLERYAPI }}
@@ -93,13 +144,13 @@ jobs:
           Publish-Module -Path $env:PACKAGE_PATH -NuGetApiKey $env:NUGET_API_KEY -Repository PSGallery
 
       - name: Dry run summary
-        if: github.event_name == 'workflow_dispatch' && inputs.dryRun
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: |
-          Write-Host "Dry run: Dataverse ${{ steps.validate.outputs.version }} was validated and staged but not published."
+          Write-Host "Dry run: the module ZIP and checksum are available as workflow artifacts. Nothing was published."
 
       - name: Verify publication
-        if: github.event_name == 'release' || inputs.dryRun == false
+        if: github.event_name == 'release' && !github.event.release.prerelease
         shell: pwsh
         env:
           PUBLISHED_VERSION: ${{ steps.validate.outputs.version }}

@@ -562,11 +562,16 @@ Get-PSDVTableItem -Table "account" -Verbose
 
 ## Releasing
 
-Pull requests targeting `dev` or `main` run the Pester suite on Windows and Ubuntu (`.github/workflows/ci.yml`). Publishing to the [PowerShell Gallery](https://www.powershellgallery.com/packages/Dataverse/) is automated by `.github/workflows/publish.yml`:
+Pull requests targeting `dev` or `main` run the Pester suite on Windows and Ubuntu (`.github/workflows/ci.yml`). `.github/workflows/publish.yml` builds module-only downloads for stable and prerelease GitHub Releases. Only stable releases publish to the [PowerShell Gallery](https://www.powershellgallery.com/packages/Dataverse/).
 
-1. In a pull request, update `ModuleVersion` in `Dataverse.psd1` (and the release notes), and merge it to `main`.
-2. Create a GitHub Release from `main` with the tag `v<ModuleVersion>` (for example `v1.2.0`). Prereleases are ignored.
-3. The workflow reruns the tests, verifies that the tag matches the manifest version, that the commit is on `main`, and that the version is not already on the Gallery, then publishes only the module files (`Dataverse.psd1`, `Dataverse.psm1`, `LICENSE`, `Public`, `Private`, `lib`).
+1. Update `ModuleVersion` in `Dataverse.psd1` and the release notes. For a prerelease, set `PrivateData.PSData.Prerelease` to a label such as `preview1`. For a stable release, remove or clear that value and merge to `main`.
+2. Create a GitHub Release with a matching tag: `v1.2.0` for a stable version, or `v1.2.0-preview1` for a prerelease. Check GitHub's **Set as a pre-release** option for prereleases. The flag must agree with the manifest. Prereleases may come from development branches; stable release commits must be reachable from `main`.
+3. After tests pass, the workflow attaches `Dataverse-<version>.zip` and its `.sha256` checksum to the release. They include only `Dataverse.psd1`, `Dataverse.psm1`, `LICENSE`, `Public`, `Private`, and `lib`, under `Dataverse/<ModuleVersion>/`. GitHub's automatic **Source code** downloads still contain the repository; choose the named module ZIP instead.
+4. Only stable releases check the Gallery for an existing version and publish using the `PSGALLERYAPI` repository secret. Prereleases never use this key or publish to the Gallery. Gallery versions cannot be overwritten.
+
+To install a downloaded ZIP, verify its checksum with `Get-FileHash -Algorithm SHA256`, then extract it into a directory listed in `$env:PSModulePath`. The result should be `<module-path>/Dataverse/<ModuleVersion>/Dataverse.psd1`. Run `Import-Module Dataverse -RequiredVersion <ModuleVersion>` to load it. Stable and prerelease builds with the same numeric version use the same installation folder; do not extract one over the other.
+
+The **Package and publish release** workflow can also be run manually. Manual runs only build downloadable workflow artifacts; they never attach release assets or publish to the Gallery. Release asset upload requires the workflow's `contents: write` permission; no protected GitHub Environment is required.
 
 ## Contributing
 
